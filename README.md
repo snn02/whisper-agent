@@ -37,6 +37,16 @@ node $Agent transcribe --project 'C:\Users\SAWA\Мой проект' --output 'C
 
 ## Подключение агентов Windows
 
+После установки выполните **одну команду** в Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\WhisperAgent\connect-windows.ps1"
+```
+
+Скрипт регистрирует локальный MCP в установленных Codex, Claude Code и OpenCode с часовым лимитом на распознавание. Уже существующую запись `whisper-agent` он не меняет. Если OpenCode хранит конфигурацию в JSONC или CLI приложения отсутствует, скрипт сообщает, что нужно подключить вручную. После подключения перезапустите Windows-приложения. **Отдельно запускать MCP не нужно:** агент запускает процесс при подключении и обращается к нему по запросу. Docker-контейнер создаётся только для команды распознавания или проверки GPU и удаляется после неё.
+
+Чтобы запустить MCP вручную для диагностики, выполните `node "$env:LOCALAPPDATA\WhisperAgent\src\mcp.mjs"`. Процесс будет ожидать запросы MCP по stdin; отсутствие обычного вывода — ожидаемо. Ниже приведены ручные способы подключения, если автоматический скрипт пропустил приложение.
+
 MCP-сервер запускается локально командой `node "%LOCALAPPDATA%\WhisperAgent\src\mcp.mjs"` (в конфигурации указывайте **развёрнутый абсолютный путь**, а не `%LOCALAPPDATA%`). Он предоставляет `list_media` и `transcribe_project`. Подключение не требует выдавать агентской командной песочнице доступ к Docker socket: Docker вызывает установленный локальный MCP-процесс.
 
 **Codex.** В обычном Windows PowerShell:
@@ -59,7 +69,7 @@ claude mcp get whisper-agent
 
 **Claude Cowork.** Для локального сеанса Cowork в приложении Claude Desktop подготовлен минимальный плагин [`integrations/claude-plugin`](integrations/claude-plugin). Установщик копирует его в `%LOCALAPPDATA%\WhisperAgent\claude-plugin`; загрузите эту папку через **Customize → Plugins → Add → Upload plugin**. Плагин содержит только локальный MCP и ссылается на `%LOCALAPPDATA%\WhisperAgent`; общий скил вы создаёте отдельно. Локальный MCP работает в Cowork-сеансах, исполняемых на вашем компьютере через Desktop. В облачном сеансе Cowork он не запускается; доступность зависит от типа сеанса и настроек вашей организации. Проверяйте инструмент в новом локальном сеансе Desktop. [Поддержка плагинов по поверхностям Claude](https://claude.com/docs/plugins/build), [архитектура Cowork](https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview).
 
-**OpenCode.** Добавьте в глобальный `%USERPROFILE%\.config\opencode\opencode.json` (или существующий глобальный конфиг) запись, сохранив другие поля:
+**OpenCode.** Добавьте в глобальный `%USERPROFILE%\.config\opencode\opencode.json` или существующий `opencode.jsonc` запись, сохранив другие поля:
 
 ```json
 {

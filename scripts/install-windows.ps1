@@ -32,6 +32,7 @@ $pluginManifest = Join-Path $pluginRoot '.claude-plugin'
 New-Item -ItemType Directory -Path $pluginManifest -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'integrations\claude-plugin\.mcp.json') -Destination $pluginRoot -Force
 Copy-Item -LiteralPath (Join-Path $sourceRoot 'integrations\claude-plugin\.claude-plugin\plugin.json') -Destination $pluginManifest -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'scripts\connect-windows.ps1') -Destination $installRoot -Force
 
 & npm.cmd ci --prefix $installRoot
 if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
@@ -47,3 +48,4 @@ Write-Host "MCP command: node `"$mcpPath`""
 Write-Host "CLI command: node `"$cliPath`" --help"
 Write-Host "Run log: $(Join-Path $installRoot 'runs.jsonl')"
 Write-Host "Cowork plugin folder: $pluginRoot"
+Write-Host "Connect agents: powershell -ExecutionPolicy Bypass -File `"$(Join-Path $installRoot 'connect-windows.ps1')`""
