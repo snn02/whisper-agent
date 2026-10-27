@@ -14,13 +14,30 @@ function Write-Utf8File([string]$Path, [string]$Content) {
     [System.IO.File]::WriteAllText($Path, $Content, $encoding)
 }
 
+function Invoke-AgentCli([string]$Executable, [string[]]$Arguments, [switch]$Quiet) {
+    # PowerShell 5.1 can turn a native process's stderr into a terminating error
+    # when ErrorActionPreference is Stop. A missing MCP entry is expected here.
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if ($Quiet) {
+            & $Executable @Arguments *> $null
+        } else {
+            & $Executable @Arguments | Out-Host
+        }
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+}
+
 if (Get-Command codex -ErrorAction SilentlyContinue) {
-    & codex mcp get whisper-agent *> $null
-    if ($LASTEXITCODE -eq 0) {
+    if ((Invoke-AgentCli 'codex' @('mcp', 'get', 'whisper-agent') -Quiet) -eq 0) {
         Write-Host 'Codex: whisper-agent is already configured; kept existing settings.'
     } else {
-        & codex mcp add whisper-agent -- node $mcpPath
-        if ($LASTEXITCODE -ne 0) { throw 'Could not add whisper-agent to Codex.' }
+        if ((Invoke-AgentCli 'codex' @('mcp', 'add', 'whisper-agent', '--', 'node', $mcpPath)) -ne 0) {
+            throw 'Could not add whisper-agent to Codex.'
+        }
         $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
         $codexConfig = Join-Path $codexHome 'config.toml'
         $configText = [System.IO.File]::ReadAllText($codexConfig)
@@ -39,13 +56,13 @@ if (Get-Command codex -ErrorAction SilentlyContinue) {
 }
 
 if (Get-Command claude -ErrorAction SilentlyContinue) {
-    & claude mcp get whisper-agent *> $null
-    if ($LASTEXITCODE -eq 0) {
+    if ((Invoke-AgentCli 'claude' @('mcp', 'get', 'whisper-agent') -Quiet) -eq 0) {
         Write-Host 'Claude Code: whisper-agent is already configured; kept existing settings.'
     } else {
         $server = @{ type = 'stdio'; command = 'node'; args = @($mcpPath); timeout = 3600000 } | ConvertTo-Json -Compress
-        & claude mcp add-json --scope user whisper-agent $server
-        if ($LASTEXITCODE -ne 0) { throw 'Could not add whisper-agent to Claude Code.' }
+        if ((Invoke-AgentCli 'claude' @('mcp', 'add-json', '--scope', 'user', 'whisper-agent', $server)) -ne 0) {
+            throw 'Could not add whisper-agent to Claude Code.'
+        }
         Write-Host 'Claude Code: connected with a 3600-second transcription timeout.'
     }
 } else {
