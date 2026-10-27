@@ -1,0 +1,12 @@
+.git
+.agents
+.codex
+.aws
+.superpowers
+node_modules
+tests
+docs
+*.log
+*.pt
+*.wav
+*.mp3
