@@ -3,7 +3,8 @@
     "whisper-agent": {
       "type": "stdio",
       "command": "node",
-      "args": ["${LOCALAPPDATA}\\WhisperAgent\\src\\mcp.mjs"]
+      "args": ["${LOCALAPPDATA}\\WhisperAgent\\src\\mcp.mjs"],
+      "timeout": 3600000
     }
   }
 }

@@ -47,6 +47,7 @@ test('save choices are required and output cannot equal project', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'whisper-core-'));
   await assert.rejects(transcribeProject({ projectDir: root, outputDir: '', outputFormat: 'txt' }), /output directory/i);
   await assert.rejects(transcribeProject({ projectDir: root, outputDir: path.join(root, 'out'), outputFormat: '' }), /output format/i);
+  await assert.rejects(transcribeProject({ projectDir: root, outputDir: path.join(root, 'out'), outputFormat: 'jsonl' }), /output format/i);
   await assert.rejects(transcribeProject({ projectDir: root, outputDir: root, outputFormat: 'txt' }), /different/i);
 });
 

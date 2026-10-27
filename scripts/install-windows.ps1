@@ -27,6 +27,11 @@ foreach ($name in @('src', 'container')) {
 foreach ($name in @('Dockerfile', '.dockerignore', 'package.json', 'package-lock.json')) {
     Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination $installRoot -Force
 }
+$pluginRoot = Join-Path $installRoot 'claude-plugin'
+$pluginManifest = Join-Path $pluginRoot '.claude-plugin'
+New-Item -ItemType Directory -Path $pluginManifest -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'integrations\claude-plugin\.mcp.json') -Destination $pluginRoot -Force
+Copy-Item -LiteralPath (Join-Path $sourceRoot 'integrations\claude-plugin\.claude-plugin\plugin.json') -Destination $pluginManifest -Force
 
 & npm.cmd ci --prefix $installRoot
 if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
@@ -41,3 +46,4 @@ Write-Host "Installed runtime: $installRoot"
 Write-Host "MCP command: node `"$mcpPath`""
 Write-Host "CLI command: node `"$cliPath`" --help"
 Write-Host "Run log: $(Join-Path $installRoot 'runs.jsonl')"
+Write-Host "Cowork plugin folder: $pluginRoot"

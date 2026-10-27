@@ -48,14 +48,14 @@ class OutputPlanningTests(unittest.TestCase):
             self.assertEqual(worker.planned_outputs(mp3, root, out, "txt"), [out / "call.mp3" / "transcript.txt"])
             self.assertEqual(worker.planned_outputs(wav, root, out, "txt"), [out / "call.wav" / "transcript.txt"])
 
-    def test_all_format_plans_six_outputs(self):
+    def test_all_format_plans_five_outputs(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "project"
             root.mkdir()
             media = root / "audio.flac"
             media.write_bytes(b"audio")
             result = worker.planned_outputs(media, root, Path(temp) / "out", "all")
-            self.assertEqual({path.suffix for path in result}, {".txt", ".srt", ".vtt", ".tsv", ".json", ".jsonl"})
+            self.assertEqual({path.suffix for path in result}, {".txt", ".srt", ".vtt", ".tsv", ".json"})
 
     def test_existing_result_requires_explicit_overwrite(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -71,6 +71,23 @@ class OutputPlanningTests(unittest.TestCase):
                 worker.preflight(root, out, "txt", False, None)
             self.assertEqual(worker.preflight(root, out, "txt", True, None), [root / "sample.wav"])
 
+    def test_dangling_result_symlink_and_parent_symlink_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "project"
+            out = Path(temp) / "out"
+            root.mkdir()
+            (root / "sample.wav").write_bytes(b"audio")
+            target = out / "sample.wav" / "transcript.txt"
+            target.parent.mkdir(parents=True)
+            target.symlink_to(Path(temp) / "missing.txt")
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                worker.preflight(root, out, "txt", False, None)
+            target.unlink()
+            target.parent.rmdir()
+            (out / "sample.wav").symlink_to(Path(temp) / "external", target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                worker.preflight(root, out, "txt", True, None)
+
     def test_missing_save_choices_and_unsupported_format_are_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -81,6 +98,8 @@ class OutputPlanningTests(unittest.TestCase):
                 worker.preflight(root, root / "out", "", False, None)
             with self.assertRaises(ValueError):
                 worker.preflight(root, root / "out", "docx", False, None)
+            with self.assertRaises(ValueError):
+                worker.preflight(root, root / "out", "jsonl", False, None)
 
 
 class TranscriptionTests(unittest.TestCase):
@@ -144,6 +163,29 @@ class TranscriptionTests(unittest.TestCase):
             self.assertNotIn("секретный текст", json.dumps(summary, ensure_ascii=False))
             self.assertIn("bad.wav", stderr.getvalue())
             self.assertNotIn("секретный текст", stderr.getvalue())
+
+    def test_writer_failure_does_not_leave_partial_outputs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "project"
+            out = Path(temp) / "out"
+            root.mkdir()
+            (root / "one.wav").write_bytes(b"one")
+            calls = []
+            modules = self.fake_modules(calls)
+
+            def broken_writer(_format, output_dir):
+                def write(_result, _audio_path):
+                    (Path(output_dir) / "transcript.txt").write_text("partial", encoding="utf-8")
+                    raise RuntimeError("writer failed")
+                return write
+
+            modules["whisper"].utils.get_writer = broken_writer
+            with patch.dict(sys.modules, modules), redirect_stderr(io.StringIO()):
+                summary = worker.transcribe_media(root, out, "all", "small", "ru", False, None)
+            self.assertEqual(summary["status"], "error")
+            self.assertEqual(summary["files"][0]["error"], "writer failed")
+            self.assertEqual(summary["files"][0]["outputs"], [])
+            self.assertFalse((out / "one.wav" / "transcript.txt").exists())
 
     def test_rejects_english_model_and_missing_cuda_before_loading(self):
         with tempfile.TemporaryDirectory() as temp:

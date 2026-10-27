@@ -126,8 +126,8 @@ export async function transcribeProject(options, deps = {}) {
   } = options;
   const project = requireAbsoluteDirectory(projectDir, 'Project directory', platform);
   const output = requireAbsoluteDirectory(outputDir, 'Output directory', platform, false);
-  if (!outputFormat || !['txt', 'srt', 'vtt', 'tsv', 'json', 'jsonl', 'all'].includes(outputFormat)) {
-    throw new Error('Output format is required and must be txt, srt, vtt, tsv, json, jsonl or all');
+  if (!outputFormat || !['txt', 'srt', 'vtt', 'tsv', 'json', 'all'].includes(outputFormat)) {
+    throw new Error('Output format is required and must be txt, srt, vtt, tsv, json or all');
   }
   const pathApi = pathsFor(platform);
   if (pathApi.normalize(project).toLowerCase() === pathApi.normalize(output).toLowerCase()) {

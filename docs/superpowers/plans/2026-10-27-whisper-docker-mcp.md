@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-27-whisper-docker-design.md`
 
+**Состояние 2026-10-27:** статические задачи 1–5 реализованы и зафиксированы на `main`; сборка Docker, проверка GPU на рабочем образе, PowerShell-установщик и запуск в Windows-приложениях остаются непроверенными из этой песочницы. Чекбоксы ниже сохранены как исходный план, а не текущий статус.
+
 ## Global Constraints
 
 - Рабочий профиль: многоязычная модель `small`, `language=ru`, `task=transcribe`, `device=cuda`; CPU fallback запрещён.
@@ -17,7 +19,7 @@
 - Формат и каталог результата обязательны; агент спрашивает недостающие значения у пользователя, если их не определяют запрос или правила проекта. Инструмент возвращает ошибку при пустых значениях.
 - Полный текст остаётся только в выходных файлах; журнал содержит файлы, длительность, ошибки и служебные метаданные.
 - Общий скил пользователь создаёт сам. Проект поставляет MCP-инструменты, CLI и контракт для этого скила; не меняет глобальные конфиги агентов автоматически.
-- Источник в `/home/sawa/projects/whisper` пока не является git-репозиторием (`.git` пустой и только для чтения); шаги commit выполняются только после появления доступного git-репозитория.
+- Репозиторий инициализирован в `/home/sawa/projects/whisper`, ветка `main`; первый коммит `f9f0514` создан после Task 1.
 
 ## File Map
 
@@ -51,7 +53,7 @@
 
 - [ ] Write `tests/test_worker.py` cases: recursive `.wav/.mp3/.m4a/.flac/.ogg/.opus/.aac/.wma/.mp4/.mov/.mkv/.webm/.avi` discovery; skip `.git`, `node_modules`, `.venv`, `dist`, `build`, all symlinks, and output subtree; `call.mp3` versus `call.wav`; no files; missing format/output; existing target without `overwrite`.
 - [ ] Run `python3 -m unittest discover -s tests -p 'test_worker.py' -v`; expect failures for missing functions.
-- [ ] Implement the three interfaces in `container/worker.py`, using `Path.relative_to` to keep inputs in the project and exactly `txt|srt|vtt|tsv|json|jsonl|all` formats. For `all`, plan six output files.
+- [ ] Implement the three interfaces in `container/worker.py`, using `Path.relative_to` to keep inputs in the project and exactly `txt|srt|vtt|tsv|json|all` formats. For `all`, plan five output files (the pinned `openai-whisper==20250625` writer does not support `jsonl`).
 - [ ] Run `python3 -m unittest discover -s tests -p 'test_worker.py' -v`; expect all Task 1 cases to pass.
 - [ ] Commit these files if git is available; otherwise record the no-git condition in the handoff.
 

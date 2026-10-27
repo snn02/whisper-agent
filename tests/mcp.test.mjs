@@ -36,6 +36,8 @@ test('missing output choices are rejected before host call', async () => {
   await withClient({ transcribeProject: async () => { called = true; } }, async client => {
     const result = await client.callTool({ name: 'transcribe_project', arguments: { project_dir: 'C:\\Project' } });
     assert.equal(result.isError, true);
+    const unsupported = await client.callTool({ name: 'transcribe_project', arguments: { project_dir: 'C:\\Project', output_dir: 'C:\\Results', output_format: 'jsonl' } });
+    assert.equal(unsupported.isError, true);
     assert.equal(called, false);
   });
 });

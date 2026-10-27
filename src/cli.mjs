@@ -8,7 +8,7 @@ Commands:
   check                                 Check CUDA GPU in the image
   list --project DIR                    List media in a project
   transcribe --project DIR --output DIR --format FORMAT
-                                        Transcribe media to txt, srt, vtt, tsv, json, jsonl or all
+                                        Transcribe media to txt, srt, vtt, tsv, json or all
 
 Options:
   --model NAME      Whisper model (default: small)

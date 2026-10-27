@@ -1,16 +1,19 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { listMedia as defaultListMedia, transcribeProject as defaultTranscribeProject } from './core.mjs';
 
+const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+
 function response(value, isError = false) {
   return { content: [{ type: 'text', text: JSON.stringify(value) }], isError };
 }
 
 export function createServer({ listMedia = defaultListMedia, transcribeProject = defaultTranscribeProject } = {}) {
-  const server = new McpServer({ name: 'whisper-agent-local', version: '0.1.0' });
+  const server = new McpServer({ name: 'whisper-agent-local', version: packageVersion });
   server.registerTool('list_media', {
     description: 'List supported audio and video files recursively in an absolute project directory. This does not transcribe files. Use the current project root unless the user chose another directory.',
     inputSchema: {
@@ -26,7 +29,7 @@ export function createServer({ listMedia = defaultListMedia, transcribeProject =
     inputSchema: {
       project_dir: z.string().min(1).describe('Absolute Windows or Linux path to the project'),
       output_dir: z.string().min(1).describe('Absolute directory for transcript files; ask user if not specified by request or rules'),
-      output_format: z.enum(['txt', 'srt', 'vtt', 'tsv', 'json', 'jsonl', 'all']).describe('Transcript format; ask user if not specified by request or rules'),
+      output_format: z.enum(['txt', 'srt', 'vtt', 'tsv', 'json', 'all']).describe('Transcript format; ask user if not specified by request or rules'),
       model: z.string().optional().describe('Whisper model, default small'),
       language: z.string().optional().describe('Spoken language, default ru'),
       image_tag: z.string().optional().describe('Optional Docker image tag for CUDA experiments'),

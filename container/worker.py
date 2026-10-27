@@ -6,6 +6,7 @@ import os
 import argparse
 import json
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -15,7 +16,7 @@ MEDIA_EXTENSIONS = {
     ".wma", ".mp4", ".mov", ".mkv", ".webm", ".avi",
 }
 SKIP_DIRECTORIES = {".git", "node_modules", ".venv", "dist", "build"}
-OUTPUT_FORMATS = ("txt", "vtt", "srt", "tsv", "json", "jsonl")
+OUTPUT_FORMATS = ("txt", "vtt", "srt", "tsv", "json")
 
 
 def discover_media(project: Path, excluded_relative: Path | None) -> list[Path]:
@@ -69,12 +70,20 @@ def preflight(
     media = discover_media(project, excluded_relative)
     if not media:
         raise ValueError("No media files found in project")
-    if not overwrite:
-        for item in media:
-            for target in planned_outputs(item, project, output, format):
-                if target.exists():
-                    raise FileExistsError(f"Result already exists: {target}")
+    for item in media:
+        for target in planned_outputs(item, project, output, format):
+            _reject_output_symlinks(target, output)
+            if not overwrite and target.exists():
+                raise FileExistsError(f"Result already exists: {target}")
     return media
+
+
+def _reject_output_symlinks(target: Path, output: Path) -> None:
+    current = target
+    while current != output:
+        if current.is_symlink():
+            raise ValueError(f"Result path contains a symlink: {current}")
+        current = current.parent
 
 
 def transcribe_media(
@@ -96,6 +105,7 @@ def transcribe_media(
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA GPU is unavailable; refusing CPU fallback")
     model = whisper.load_model(model_name, device="cuda", download_root="/models")
+    output.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     files = []
     for item in media:
@@ -105,11 +115,22 @@ def transcribe_media(
         entry = {"input": relative.as_posix(), "outputs": [], "duration_ms": 0, "error": None}
         try:
             target_dir = output / relative
-            target_dir.mkdir(parents=True, exist_ok=True)
             result = model.transcribe(str(item), language=language, task="transcribe", verbose=None)
-            writer = whisper.utils.get_writer(format, str(target_dir))
-            writer(result, "transcript.media")
-            entry["outputs"] = [path.relative_to(output).as_posix() for path in outputs]
+            with tempfile.TemporaryDirectory(prefix=".whisper-", dir=output) as staging:
+                writer = whisper.utils.get_writer(format, staging)
+                writer(result, "transcript.media")
+                staged = [Path(staging) / target.name for target in outputs]
+                missing = [path.name for path in staged if not path.is_file()]
+                if missing:
+                    raise RuntimeError(f"Writer did not create expected outputs: {', '.join(missing)}")
+                _reject_output_symlinks(outputs[0], output)
+                target_dir.mkdir(parents=True, exist_ok=True)
+                for source, target in zip(staged, outputs):
+                    _reject_output_symlinks(target, output)
+                    if target.exists() and not overwrite:
+                        raise FileExistsError(f"Result already exists: {target}")
+                    os.replace(source, target)
+                    entry["outputs"].append(target.relative_to(output).as_posix())
         except Exception as error:
             entry["error"] = str(error)
             print(f"Failed to transcribe {relative}: {error}", file=sys.stderr)
