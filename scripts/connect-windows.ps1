@@ -59,11 +59,10 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
     if ((Invoke-AgentCli 'claude' @('mcp', 'get', 'whisper-agent') -Quiet) -eq 0) {
         Write-Host 'Claude Code: whisper-agent is already configured; kept existing settings.'
     } else {
-        $server = @{ type = 'stdio'; command = 'node'; args = @($mcpPath); timeout = 3600000 } | ConvertTo-Json -Compress
-        if ((Invoke-AgentCli 'claude' @('mcp', 'add-json', '--scope', 'user', 'whisper-agent', $server)) -ne 0) {
+        if ((Invoke-AgentCli 'claude' @('mcp', 'add', '--scope', 'user', '--transport', 'stdio', 'whisper-agent', '--', 'node', $mcpPath)) -ne 0) {
             throw 'Could not add whisper-agent to Claude Code.'
         }
-        Write-Host 'Claude Code: connected with a 3600-second transcription timeout.'
+        Write-Host 'Claude Code: connected with its standard tool timeout.'
     }
 } else {
     Write-Warning 'Claude Code CLI was not found; configure Claude Code from its MCP settings using the command shown below.'
