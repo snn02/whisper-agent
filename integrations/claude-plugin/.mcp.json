@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "whisper-agent": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${LOCALAPPDATA}\\WhisperAgent\\src\\mcp.mjs"]
+    }
+  }
+}
