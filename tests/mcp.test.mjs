@@ -42,18 +42,29 @@ test('missing output choices are rejected before host call', async () => {
   });
 });
 
-test('transcribe_project maps all options and returns metadata without text', async () => {
+test('transcribe_project fixes the MCP model to small and returns metadata without text', async () => {
   let received;
   await withClient({ transcribeProject: async options => {
     received = options;
     return { status: 'partial', files: [{ input: 'a.wav', duration_ms: 1200, error: null, outputs: ['a.wav/transcript.txt'] }, { input: 'b.wav', duration_ms: 100, error: 'bad media', outputs: [] }] };
   } }, async client => {
     const result = await client.callTool({ name: 'transcribe_project', arguments: {
-      project_dir: 'C:\\Project', output_dir: 'C:\\Results', output_format: 'txt', model: 'small', language: 'ru', image_tag: 'custom:cuda', overwrite: true,
+      project_dir: 'C:\\Project', output_dir: 'C:\\Results', output_format: 'txt', language: 'ru', image_tag: 'custom:cuda', overwrite: true,
     } });
     assert.deepEqual(received, { projectDir: 'C:\\Project', outputDir: 'C:\\Results', outputFormat: 'txt', model: 'small', language: 'ru', imageTag: 'custom:cuda', overwrite: true });
     assert.equal(result.isError, true);
     assert.equal(JSON.parse(result.content[0].text).status, 'partial');
+  });
+});
+
+test('transcribe_project rejects an agent-selected model before starting Docker', async () => {
+  let called = false;
+  await withClient({ transcribeProject: async () => { called = true; } }, async client => {
+    const result = await client.callTool({ name: 'transcribe_project', arguments: {
+      project_dir: 'C:\\Project', output_dir: 'C:\\Results', output_format: 'txt', model: 'medium',
+    } });
+    assert.equal(result.isError, true);
+    assert.equal(called, false);
   });
 });
 

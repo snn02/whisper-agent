@@ -25,21 +25,21 @@ export function createServer({ listMedia = defaultListMedia, transcribeProject =
     catch (error) { return response({ error: error.message }, true); }
   });
   server.registerTool('transcribe_project', {
-    description: 'Transcribe all supported media in a project with local GPU Whisper. Before calling, use the user request or project/user rules to determine output_dir and output_format. If either is absent, ask the user where and how to save; do not choose defaults. The result reports paths, durations and errors. Full transcript text is saved only to result files. A partial result means some files failed.',
+    description: 'Transcribe all supported media in a project with local GPU Whisper using the fixed small model. Before calling, use the user request or project/user rules to determine output_dir and output_format. If either is absent, ask the user where and how to save; do not choose defaults. Other models require a user-run CLI command. The result reports paths, durations and errors. Full transcript text is saved only to result files. A partial result means some files failed.',
     inputSchema: {
       project_dir: z.string().min(1).describe('Absolute Windows or Linux path to the project'),
       output_dir: z.string().min(1).describe('Absolute directory for transcript files; ask user if not specified by request or rules'),
       output_format: z.enum(['txt', 'srt', 'vtt', 'tsv', 'json', 'all']).describe('Transcript format; ask user if not specified by request or rules'),
-      model: z.string().optional().describe('Whisper model, default small'),
+      model: z.literal('small').optional().describe('MCP permits only small; other models require a user-run CLI command'),
       language: z.string().optional().describe('Spoken language, default ru'),
       image_tag: z.string().optional().describe('Optional Docker image tag for CUDA experiments'),
       overwrite: z.boolean().optional().describe('Replace existing transcript files; default false'),
     },
-  }, async ({ project_dir, output_dir, output_format, model, language, image_tag, overwrite }) => {
+  }, async ({ project_dir, output_dir, output_format, language, image_tag, overwrite }) => {
     try {
       const result = await transcribeProject({
         projectDir: project_dir, outputDir: output_dir, outputFormat: output_format,
-        model, language, imageTag: image_tag, overwrite,
+        model: 'small', language, imageTag: image_tag, overwrite,
       });
       return response(result, result.status !== 'success');
     } catch (error) { return response({ error: error.message }, true); }
