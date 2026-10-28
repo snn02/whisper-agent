@@ -107,11 +107,20 @@ if (Get-Command opencode -ErrorAction SilentlyContinue) {
                 if ($servers.PSObject.Properties['whisper-agent']) {
                     Write-Host 'OpenCode: whisper-agent is already configured; kept existing settings.'
                 } else {
-                    $entry = [pscustomobject]@{ type = 'local'; command = @('node', $mcpPath); timeout = 3600000 }
                     if ($majorVersion -ge 2) {
-                        $entry | Add-Member -NotePropertyName disabled -NotePropertyValue $false
+                        $entry = [pscustomobject]@{
+                            type = 'local'
+                            command = @('node', $mcpPath)
+                            timeout = [pscustomobject]@{ execution = 3600000 }
+                            disabled = $false
+                        }
                     } else {
-                        $entry | Add-Member -NotePropertyName enabled -NotePropertyValue $true
+                        $entry = [pscustomobject]@{
+                            type = 'local'
+                            command = @('node', $mcpPath)
+                            timeout = 3600000
+                            enabled = $true
+                        }
                     }
                     $servers | Add-Member -NotePropertyName 'whisper-agent' -NotePropertyValue $entry
                     if (Test-Path -LiteralPath $configPath -PathType Leaf) {
