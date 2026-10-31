@@ -1,5 +1,10 @@
 param(
-    [string]$ImageTag = 'whisper-agent:torch2.13-cu132'
+    [string]$ImageTag = 'whisper-agent:torch2.13-cu132',
+    [ValidateSet('ask', 'project', 'global', 'custom', 'skip')]
+    [string]$SkillScope = 'ask',
+    [string]$SkillProjectDirectory,
+    [string]$SkillsDirectory,
+    [switch]$OverwriteSkill
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,6 +19,30 @@ foreach ($command in @('node', 'npm', 'docker')) {
 $nodeVersion = (& node --version).Trim()
 if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^v(\d+)\.') { throw 'Could not determine Node.js version.' }
 if ([int]$Matches[1] -lt 20) { throw "Node.js 20+ is required; found $nodeVersion." }
+
+# Ask before the long image build, so the choice is not hidden after installation.
+if ($SkillScope -eq 'ask') {
+    Write-Host 'Install the independent name-speakers skill:'
+    Write-Host '  project - project .agents/skills; global - home .agents/skills'
+    Write-Host '  custom - another agent skills directory; skip - service only'
+    $SkillScope = (Read-Host 'Choose project, global, custom or skip').Trim().ToLowerInvariant()
+    if ($SkillScope -notin @('project', 'global', 'custom', 'skip')) { throw 'Choose a valid skill installation scope.' }
+}
+if ($SkillScope -eq 'project' -and -not $SkillProjectDirectory) {
+    $SkillProjectDirectory = Read-Host 'Absolute project directory for the skill'
+}
+if ($SkillScope -eq 'custom' -and -not $SkillsDirectory) {
+    $SkillsDirectory = Read-Host 'Absolute skills directory of your agent'
+}
+if ($SkillScope -ne 'skip') {
+    $skillArgs = @((Join-Path $sourceRoot 'scripts\install-skill.mjs'), '--scope', $SkillScope)
+    if ($SkillScope -eq 'project') { $skillArgs += @('--project-dir', $SkillProjectDirectory) }
+    if ($SkillScope -eq 'custom') { $skillArgs += @('--skills-dir', $SkillsDirectory) }
+    if ($OverwriteSkill) { $skillArgs += '--overwrite' }
+    & node @skillArgs
+    if ($LASTEXITCODE -ne 0) { throw 'Skill installation failed. Existing skills are preserved unless -OverwriteSkill was specified.' }
+    Write-Host 'The skill is installed independently; it remains usable if service installation fails.'
+}
 
 & docker info --format '{{.ServerVersion}}' | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop is not running or is unavailable.' }

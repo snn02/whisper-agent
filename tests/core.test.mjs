@@ -22,6 +22,17 @@ function fakeSpawn(response, calls) {
   };
 }
 
+test('diarization is opt-in and token is forwarded by environment name only', () => {
+  const options = { command: 'transcribe', projectDir: '/project', outputDir: '/out', outputFormat: 'txt' };
+  const plain = buildDockerArgs(options);
+  assert.equal(plain.includes('--diarize'), false);
+  assert.equal(plain.includes('HF_TOKEN'), false);
+  const args = buildDockerArgs({ ...options, diarize: true });
+  assert.ok(args.includes('--diarize'));
+  assert.equal(args[args.indexOf('HF_TOKEN') - 1], '--env');
+  assert.ok(args.indexOf('HF_TOKEN') < args.indexOf('whisper-agent:torch2.13-cu132'));
+});
+
 test('Windows project path with spaces and Cyrillic stays one Docker mount argument', () => {
   const args = buildDockerArgs({
     command: 'transcribe',

@@ -1,6 +1,6 @@
 {
   "name": "local-whisper-agent",
   "displayName": "Local Whisper Agent",
-  "version": "0.2.0",
+  "version": "1.1.0",
   "description": "Run local GPU Whisper transcription for project media through a Windows MCP process."
 }

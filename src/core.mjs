@@ -33,7 +33,7 @@ function excludedRelative(projectDir, outputDir, platform) {
 export function buildDockerArgs(options, platform = process.platform) {
   const {
     command, projectDir, outputDir, outputFormat,
-    model = 'small', language = 'ru', imageTag = DEFAULT_IMAGE, overwrite = false,
+    model = 'small', language = 'ru', imageTag = DEFAULT_IMAGE, overwrite = false, diarize = false,
   } = options;
   if (typeof imageTag !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(imageTag)) {
     throw new Error('Docker image tag is invalid');
@@ -48,6 +48,7 @@ export function buildDockerArgs(options, platform = process.platform) {
     if (command === 'transcribe') args.push('--mount', `type=bind,source=${outputDir},target=/output`);
     args.push('--mount', `type=volume,source=${MODEL_VOLUME},target=/models`);
   }
+  if (command === 'transcribe' && diarize) args.push('--env', 'HF_TOKEN');
   args.push(imageTag);
   if (command === 'check') return [...args, 'python', '-c', 'import torch; assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0))'];
   args.push('python', '/app/worker.py', command, '--project', '/input');
@@ -56,6 +57,7 @@ export function buildDockerArgs(options, platform = process.platform) {
   if (command === 'transcribe') {
     args.push('--output', '/output', '--format', outputFormat, '--model', model, '--language', language);
     if (overwrite) args.push('--overwrite');
+    if (diarize) args.push('--diarize');
   }
   return args;
 }
@@ -122,7 +124,7 @@ export async function transcribeProject(options, deps = {}) {
   const platform = deps.platform ?? process.platform;
   const {
     projectDir, outputDir, outputFormat,
-    model = 'small', language = 'ru', imageTag = DEFAULT_IMAGE, overwrite = false,
+    model = 'small', language = 'ru', imageTag = DEFAULT_IMAGE, overwrite = false, diarize = false,
   } = options;
   const project = requireAbsoluteDirectory(projectDir, 'Project directory', platform);
   const output = requireAbsoluteDirectory(outputDir, 'Output directory', platform, false);
@@ -141,7 +143,7 @@ export async function transcribeProject(options, deps = {}) {
   try {
     const processResult = await runDocker(buildDockerArgs({
       command: 'transcribe', projectDir: project, outputDir: output, outputFormat,
-      model, language, imageTag, overwrite,
+      model, language, imageTag, overwrite, diarize,
     }, platform), deps);
     const worker = parseWorkerResult(processResult);
     const files = (worker.files ?? []).map(file => ({
@@ -152,7 +154,7 @@ export async function transcribeProject(options, deps = {}) {
     }));
     record = {
       timestamp, project_dir: project, output_dir: output, output_format: outputFormat,
-      image_tag: imageTag, model, language, status: worker.status ?? 'error', files,
+      image_tag: imageTag, model, language, diarize, status: worker.status ?? 'error', files,
       total_duration_ms: Math.round(performance.now() - started),
       error: worker.error ?? null,
     };
@@ -160,7 +162,7 @@ export async function transcribeProject(options, deps = {}) {
     failure = error;
     record = {
       timestamp, project_dir: project, output_dir: output, output_format: outputFormat,
-      image_tag: imageTag, model, language, status: 'error', files: [],
+      image_tag: imageTag, model, language, diarize, status: 'error', files: [],
       total_duration_ms: Math.round(performance.now() - started), error: error.message,
     };
   }

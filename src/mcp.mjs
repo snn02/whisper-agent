@@ -34,12 +34,13 @@ export function createServer({ listMedia = defaultListMedia, transcribeProject =
       language: z.string().optional().describe('Spoken language, default ru'),
       image_tag: z.string().optional().describe('Optional Docker image tag for CUDA experiments'),
       overwrite: z.boolean().optional().describe('Replace existing transcript files; default false'),
+      diarize: z.boolean().optional().describe('Add transcript.diarized.json with anonymous SpeakerN labels; default false. Names are assigned separately by the name-speakers skill.'),
     },
-  }, async ({ project_dir, output_dir, output_format, language, image_tag, overwrite }) => {
+  }, async ({ project_dir, output_dir, output_format, language, image_tag, overwrite, diarize }) => {
     try {
       const result = await transcribeProject({
         projectDir: project_dir, outputDir: output_dir, outputFormat: output_format,
-        model: 'small', language, imageTag: image_tag, overwrite,
+        model: 'small', language, imageTag: image_tag, overwrite, diarize,
       });
       return response(result, result.status !== 'success');
     } catch (error) { return response({ error: error.message }, true); }

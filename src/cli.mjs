@@ -15,6 +15,7 @@ Options:
   --language CODE   Spoken language (default: ru)
   --image TAG       Docker image (default: whisper-agent:torch2.13-cu132)
   --overwrite       Replace existing result files
+  --diarize         Add transcript.diarized.json with SpeakerN labels (requires pyannote weights)
 `;
 
 async function main(argv) {
@@ -34,6 +35,7 @@ async function main(argv) {
       language: { type: 'string' },
       image: { type: 'string' },
       overwrite: { type: 'boolean' },
+      diarize: { type: 'boolean' },
     },
   });
   if (command === 'check') {
@@ -54,6 +56,7 @@ async function main(argv) {
     language: values.language,
     imageTag: values.image,
     overwrite: values.overwrite ?? false,
+    diarize: values.diarize ?? false,
   });
   process.stdout.write(`${JSON.stringify(result)}\n`);
   return result.status === 'success' ? 0 : 1;

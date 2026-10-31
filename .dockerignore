@@ -6,6 +6,7 @@
 node_modules
 tests
 docs
+dist
 *.log
 *.pt
 *.wav

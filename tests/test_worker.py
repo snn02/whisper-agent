@@ -35,6 +35,24 @@ class MediaDiscoveryTests(unittest.TestCase):
 
 
 class OutputPlanningTests(unittest.TestCase):
+    def test_diarized_sidecar_is_preflighted_even_for_txt(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "project"
+            out = Path(temp) / "out"
+            root.mkdir()
+            media = root / "call.wav"
+            media.write_bytes(b"audio")
+            sidecar = out / "call.wav" / "transcript.diarized.json"
+            self.assertIn(sidecar, worker.planned_outputs(media, root, out, "txt", diarize=True))
+            sidecar.parent.mkdir(parents=True)
+            sidecar.write_text("old")
+            with self.assertRaises(FileExistsError):
+                worker.preflight(root, out, "txt", False, None, diarize=True)
+            sidecar.unlink()
+            sidecar.symlink_to(Path(temp) / "missing.json")
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                worker.preflight(root, out, "txt", True, None, diarize=True)
+
     def test_same_stem_different_extensions_have_distinct_results(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "project"
@@ -103,6 +121,44 @@ class OutputPlanningTests(unittest.TestCase):
 
 
 class TranscriptionTests(unittest.TestCase):
+    def test_diarization_writes_sidecar_and_keeps_summary_private(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root, out = Path(temp) / "project", Path(temp) / "out"
+            root.mkdir()
+            (root / "one.wav").write_bytes(b"one")
+            calls = []
+            diarizer = types.SimpleNamespace(analyze=lambda _: ([(0, 1, "voice")], [(0, 1, "voice")]))
+            with patch.dict(sys.modules, self.fake_modules(calls)), patch.object(worker, "create_diarizer", return_value=diarizer):
+                result = worker.transcribe_media(root, out, "txt", diarize=True)
+            document = json.loads((out / "one.wav" / "transcript.diarized.json").read_text())
+            self.assertEqual(document["schema_version"], 1)
+            self.assertEqual(document["speakers"], ["Speaker1"])
+            self.assertEqual(document["segments"][0]["text"], "секретный текст")
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(len(result["files"][0]["outputs"]), 2)
+            self.assertNotIn("секретный текст", json.dumps(result, ensure_ascii=False))
+            self.assertTrue(next(call for call in calls if call[0] == "transcribe")[2]["word_timestamps"])
+
+    def test_diarization_failure_keeps_other_files_and_does_not_publish_partial_text(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root, out = Path(temp) / "project", Path(temp) / "out"
+            root.mkdir()
+            for name in ("one.wav", "two.wav"):
+                (root / name).write_bytes(b"audio")
+            calls = []
+            def analyze(file):
+                if file.name == "one.wav":
+                    raise RuntimeError("private transcript and hf_private_token")
+                return [], []
+            diarizer = types.SimpleNamespace(analyze=analyze)
+            stderr = io.StringIO()
+            with patch.dict(sys.modules, self.fake_modules(calls)), patch.object(worker, "create_diarizer", return_value=diarizer), redirect_stderr(stderr):
+                result = worker.transcribe_media(root, out, "txt", diarize=True)
+            self.assertEqual(result["status"], "partial")
+            self.assertEqual(result["files"][0]["outputs"], [])
+            self.assertFalse((out / "one.wav" / "transcript.txt").exists())
+            self.assertNotIn("private", json.dumps(result) + stderr.getvalue())
+
     def fake_modules(self, calls):
         class FakeModel:
             def transcribe(self, audio_path, **options):

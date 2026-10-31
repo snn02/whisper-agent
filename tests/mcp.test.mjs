@@ -51,7 +51,7 @@ test('transcribe_project fixes the MCP model to small and returns metadata witho
     const result = await client.callTool({ name: 'transcribe_project', arguments: {
       project_dir: 'C:\\Project', output_dir: 'C:\\Results', output_format: 'txt', language: 'ru', image_tag: 'custom:cuda', overwrite: true,
     } });
-    assert.deepEqual(received, { projectDir: 'C:\\Project', outputDir: 'C:\\Results', outputFormat: 'txt', model: 'small', language: 'ru', imageTag: 'custom:cuda', overwrite: true });
+    assert.deepEqual(received, { projectDir: 'C:\\Project', outputDir: 'C:\\Results', outputFormat: 'txt', model: 'small', language: 'ru', imageTag: 'custom:cuda', overwrite: true, diarize: undefined });
     assert.equal(result.isError, true);
     assert.equal(JSON.parse(result.content[0].text).status, 'partial');
   });
@@ -73,5 +73,19 @@ test('host error is reported as a tool error', async () => {
     const result = await client.callTool({ name: 'list_media', arguments: { project_dir: 'C:\\Project' } });
     assert.equal(result.isError, true);
     assert.match(result.content[0].text, /Docker unavailable/);
+  });
+});
+
+test('diarize maps to host without accepting participant names or token parameters', async () => {
+  let received;
+  await withClient({ transcribeProject: async options => { received = options; return { status: 'success', files: [] }; } }, async client => {
+    const { tools } = await client.listTools();
+    const schema = tools.find(tool => tool.name === 'transcribe_project').inputSchema;
+    assert.equal(schema.properties.diarize.type, 'boolean');
+    assert.equal(schema.properties.participants, undefined);
+    assert.equal(schema.properties.hf_token, undefined);
+    await client.callTool({ name: 'transcribe_project', arguments: { project_dir: '/project', output_dir: '/out', output_format: 'txt', diarize: true } });
+    assert.equal(received.diarize, true);
+    assert.equal(received.model, 'small');
   });
 });
