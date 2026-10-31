@@ -15,7 +15,7 @@ Options:
   --language CODE   Spoken language (default: ru)
   --image TAG       Docker image (default: whisper-agent:torch2.13-cu132)
   --overwrite       Replace existing result files
-  --diarize         Add transcript.diarized.json with SpeakerN labels (requires pyannote weights)
+  --diarize         Group speaker turns into timestamped TXT (requires --format txt)
 `;
 
 async function main(argv) {

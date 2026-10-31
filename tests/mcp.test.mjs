@@ -87,5 +87,20 @@ test('diarize maps to host without accepting participant names or token paramete
     await client.callTool({ name: 'transcribe_project', arguments: { project_dir: '/project', output_dir: '/out', output_format: 'txt', diarize: true } });
     assert.equal(received.diarize, true);
     assert.equal(received.model, 'small');
+
+  });
+});
+
+test('MCP rejects non-TXT diarization before invoking transcription', async () => {
+  let called = false;
+  await withClient({ transcribeProject: async () => { called = true; return {status: 'success'}; } }, async client => {
+    for (const format of ['srt', 'vtt', 'tsv', 'json', 'all']) {
+      const result = await client.callTool({ name: 'transcribe_project', arguments: {
+        project_dir: '/project', output_dir: '/out', output_format: format, diarize: true,
+      } });
+      assert.equal(result.isError, true);
+      assert.match(result.content[0].text, /diarization.*txt/i);
+    }
+    assert.equal(called, false);
   });
 });

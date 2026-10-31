@@ -30,11 +30,21 @@ function excludedRelative(projectDir, outputDir, platform) {
   return relative.split(pathApi.sep).join('/');
 }
 
+export function validateOutputFormat(outputFormat, diarize = false) {
+  if (!['txt', 'srt', 'vtt', 'tsv', 'json', 'all'].includes(outputFormat)) {
+    throw new Error('Output format is required and must be txt, srt, vtt, tsv, json or all');
+  }
+  if (diarize && outputFormat !== 'txt') {
+    throw new Error('Diarization requires txt output; select txt or disable diarization. Do not rerun transcription to obtain a JSON sidecar.');
+  }
+}
+
 export function buildDockerArgs(options, platform = process.platform) {
   const {
     command, projectDir, outputDir, outputFormat,
     model = 'small', language = 'ru', imageTag = DEFAULT_IMAGE, overwrite = false, diarize = false,
   } = options;
+  if (command === 'transcribe') validateOutputFormat(outputFormat, diarize);
   if (typeof imageTag !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(imageTag)) {
     throw new Error('Docker image tag is invalid');
   }
@@ -128,9 +138,7 @@ export async function transcribeProject(options, deps = {}) {
   } = options;
   const project = requireAbsoluteDirectory(projectDir, 'Project directory', platform);
   const output = requireAbsoluteDirectory(outputDir, 'Output directory', platform, false);
-  if (!outputFormat || !['txt', 'srt', 'vtt', 'tsv', 'json', 'all'].includes(outputFormat)) {
-    throw new Error('Output format is required and must be txt, srt, vtt, tsv, json or all');
-  }
+  validateOutputFormat(outputFormat, diarize);
   const pathApi = pathsFor(platform);
   if (pathApi.normalize(project).toLowerCase() === pathApi.normalize(output).toLowerCase()) {
     throw new Error('Output directory must be different from project root');

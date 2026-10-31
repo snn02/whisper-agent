@@ -48,6 +48,19 @@ test('Windows project path with spaces and Cyrillic stays one Docker mount argum
   assert.ok(args.includes('all'));
   assert.ok(args.includes('--rm'));
 });
+test('diarization rejects subtitle and JSON formats before launching Docker', async () => {
+  const options = { command: 'transcribe', projectDir: '/project', outputDir: '/out', outputFormat: 'txt', diarize: true };
+  assert.ok(buildDockerArgs(options).includes('--diarize'));
+  for (const outputFormat of ['srt', 'vtt', 'tsv', 'json', 'all']) {
+    assert.throws(() => buildDockerArgs({ ...options, outputFormat }), /diarization.*txt/i);
+  }
+  const root = mkdtempSync(path.join(tmpdir(), 'whisper-format-'));
+  const calls = [];
+  await assert.rejects(transcribeProject({ projectDir: root, outputDir: path.join(root, 'out'), outputFormat: 'srt', diarize: true }, {
+    spawn: fakeSpawn({ stdout: '{}' }, calls), env: { WHISPER_LOG_PATH: path.join(root, 'runs.jsonl') },
+  }), /diarization.*txt/i);
+  assert.equal(calls.length, 0);
+});
 test('Docker image and bind paths cannot inject mount or run options', () => {
   const options = { command: 'transcribe', projectDir: '/tmp/project', outputDir: '/tmp/results', outputFormat: 'txt' };
   assert.throws(() => buildDockerArgs({ ...options, imageTag: '--privileged' }), /image tag/i);

@@ -51,6 +51,8 @@ def discover_media(project: Path, excluded_relative: Path | None) -> list[Path]:
 def planned_outputs(media: Path, project: Path, output: Path, format: str, diarize: bool = False) -> list[Path]:
     if format not in (*OUTPUT_FORMATS, "all"):
         raise ValueError(f"Unsupported output format: {format}")
+    if diarize and format != "txt":
+        raise ValueError("diarization requires txt output; use --format txt or disable --diarize")
     if media.is_symlink():
         raise ValueError("Symlink inputs are not supported")
     try:
@@ -59,8 +61,6 @@ def planned_outputs(media: Path, project: Path, output: Path, format: str, diari
         raise ValueError("Input is outside the project") from error
     formats = OUTPUT_FORMATS if format == "all" else (format,)
     targets = [output / relative / f"transcript.{extension}" for extension in formats]
-    if diarize:
-        targets.append(output / relative / "transcript.diarized.json")
     return targets
 
 
@@ -93,6 +93,27 @@ def _reject_output_symlinks(target: Path, output: Path) -> None:
         if current.is_symlink():
             raise ValueError(f"Result path contains a symlink: {current}")
         current = current.parent
+
+
+def write_diarized(document: dict, output: Path) -> None:
+    """Write one timestamped paragraph per consecutive identified speaker."""
+    blocks = []
+    for segment in document["segments"]:
+        speaker = segment["speaker_id"]
+        text = " ".join(segment["text"].split())
+        if blocks and speaker is not None and blocks[-1]["speaker_id"] == speaker:
+            blocks[-1]["parts"].append(text)
+        else:
+            blocks.append({"start": segment["start"], "speaker_id": speaker, "parts": [text]})
+    paragraphs = []
+    for block in blocks:
+        seconds = int(block["start"])
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        timestamp = f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
+        text = " ".join(part for part in block["parts"] if part)
+        paragraphs.append(f"[{timestamp}] {block['speaker_id'] or 'SpeakerUnknown'}: {text}")
+    (output / "transcript.txt").write_text("\n\n".join(paragraphs) + ("\n" if paragraphs else ""), encoding="utf-8")
 
 
 def transcribe_media(
@@ -138,10 +159,10 @@ def transcribe_media(
                 except Exception:
                     raise RuntimeError("Diarization failed; check audio and GPU resources") from None
             with tempfile.TemporaryDirectory(prefix=".whisper-", dir=output) as staging:
-                writer = whisper.utils.get_writer(format, staging)
-                writer(result, "transcript.media")
                 if document is not None:
-                    (Path(staging) / "transcript.diarized.json").write_text(json.dumps(document, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+                    write_diarized(document, Path(staging))
+                else:
+                    whisper.utils.get_writer(format, staging)(result, "transcript.media")
                 staged = [Path(staging) / target.name for target in outputs]
                 missing = [path.name for path in staged if not path.is_file()]
                 if missing:

@@ -35,21 +35,23 @@ class MediaDiscoveryTests(unittest.TestCase):
 
 
 class OutputPlanningTests(unittest.TestCase):
-    def test_diarized_sidecar_is_preflighted_even_for_txt(self):
+    def test_diarization_requires_txt_and_preflights_only_txt(self):
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp) / "project"
-            out = Path(temp) / "out"
+            root, out = Path(temp) / "project", Path(temp) / "out"
             root.mkdir()
             media = root / "call.wav"
             media.write_bytes(b"audio")
-            sidecar = out / "call.wav" / "transcript.diarized.json"
-            self.assertIn(sidecar, worker.planned_outputs(media, root, out, "txt", diarize=True))
-            sidecar.parent.mkdir(parents=True)
-            sidecar.write_text("old")
+            target = out / "call.wav" / "transcript.txt"
+            self.assertEqual(worker.planned_outputs(media, root, out, "txt", diarize=True), [target])
+            for format in ("srt", "vtt", "tsv", "json", "all"):
+                with self.subTest(format=format), self.assertRaisesRegex(ValueError, "diarization.*txt"):
+                    worker.preflight(root, out, format, False, None, diarize=True)
+            target.parent.mkdir(parents=True)
+            target.write_text("old")
             with self.assertRaises(FileExistsError):
                 worker.preflight(root, out, "txt", False, None, diarize=True)
-            sidecar.unlink()
-            sidecar.symlink_to(Path(temp) / "missing.json")
+            target.unlink()
+            target.symlink_to(Path(temp) / "missing.txt")
             with self.assertRaisesRegex(ValueError, "symlink"):
                 worker.preflight(root, out, "txt", True, None, diarize=True)
 
@@ -121,23 +123,19 @@ class OutputPlanningTests(unittest.TestCase):
 
 
 class TranscriptionTests(unittest.TestCase):
-    def test_diarization_writes_sidecar_and_keeps_summary_private(self):
+    def test_diarization_labels_selected_output_without_sidecar_by_default(self):
         with tempfile.TemporaryDirectory() as temp:
             root, out = Path(temp) / "project", Path(temp) / "out"
             root.mkdir()
             (root / "one.wav").write_bytes(b"one")
-            calls = []
             diarizer = types.SimpleNamespace(analyze=lambda _: ([(0, 1, "voice")], [(0, 1, "voice")]))
-            with patch.dict(sys.modules, self.fake_modules(calls)), patch.object(worker, "create_diarizer", return_value=diarizer):
+            with patch.dict(sys.modules, self.fake_modules([])), patch.object(worker, "create_diarizer", return_value=diarizer):
                 result = worker.transcribe_media(root, out, "txt", diarize=True)
-            document = json.loads((out / "one.wav" / "transcript.diarized.json").read_text())
-            self.assertEqual(document["schema_version"], 1)
-            self.assertEqual(document["speakers"], ["Speaker1"])
-            self.assertEqual(document["segments"][0]["text"], "секретный текст")
             self.assertEqual(result["status"], "success")
-            self.assertEqual(len(result["files"][0]["outputs"]), 2)
+            self.assertEqual(result["files"][0]["outputs"], ["one.wav/transcript.txt"])
+            self.assertEqual((out / "one.wav" / "transcript.txt").read_text().strip(), "[0:00] Speaker1: секретный текст")
+            self.assertEqual(sorted(p.name for p in (out / "one.wav").iterdir()), ["transcript.txt"])
             self.assertNotIn("секретный текст", json.dumps(result, ensure_ascii=False))
-            self.assertTrue(next(call for call in calls if call[0] == "transcribe")[2]["word_timestamps"])
 
     def test_diarization_failure_keeps_other_files_and_does_not_publish_partial_text(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -165,7 +163,9 @@ class TranscriptionTests(unittest.TestCase):
                 calls.append(("transcribe", Path(audio_path).name, options))
                 if Path(audio_path).name == "bad.wav":
                     raise RuntimeError("decode failed")
-                return {"text": "секретный текст", "segments": [{"text": "секретный текст", "start": 0, "end": 1}], "language": "ru"}
+                return {"text": "секретный текст", "segments": [{"text": "секретный текст", "start": 0, "end": 1, "words": [
+                    {"word": "секретный", "start": 0, "end": 0.5}, {"word": " текст", "start": 0.5, "end": 1},
+                ]}], "language": "ru"}
 
         def load_model(name, *, device, download_root):
             calls.append(("load", name, device, download_root))
