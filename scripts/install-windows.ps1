@@ -8,7 +8,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$sourceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).ProviderPath
 if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is not set.' }
 $installRoot = Join-Path $env:LOCALAPPDATA 'WhisperAgent'
 foreach ($command in @('node', 'npm', 'docker')) {
